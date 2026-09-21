@@ -112,6 +112,26 @@ namespace Microsoft.Identity.Web.Test.Blazor
 #pragma warning restore ASPDEPR004
         }
 
+#if NET11_0_OR_GREATER
+        private static async Task<WebApplication> CreateAutomaticCsrfAppAsync(AuthState authState)
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton(authState);
+            builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddScheme<AuthenticationSchemeOptions, StubCookieAndOidcHandler>(
+                    CookieAuthenticationDefaults.AuthenticationScheme, _ => { })
+                .AddScheme<AuthenticationSchemeOptions, StubCookieAndOidcHandler>(
+                    OpenIdConnectDefaults.AuthenticationScheme, _ => { });
+            builder.Services.AddAuthorization();
+
+            var app = builder.Build();
+            app.MapLoginAndLogout();
+            await app.StartAsync();
+            return app;
+        }
+#endif
+
         private static async Task<(string Token, string Cookie)> GetAntiforgeryTokenAndCookieAsync(HttpClient client)
         {
             using var response = await client.GetAsync("/_testing/antiforgery-token");
@@ -321,6 +341,49 @@ namespace Microsoft.Identity.Web.Test.Blazor
             // form binding, not a silent 200 CSRF bypass.
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
+
+#if NET11_0_OR_GREATER
+        [Fact]
+        public async Task Logout_AutomaticCsrfProtection_AllowsSameOriginPostWithoutToken()
+        {
+            using var app = await CreateAutomaticCsrfAppAsync(new AuthState { Authenticated = true });
+            using var client = app.GetTestClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/logout")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["ReturnUrl"] = "/",
+                }),
+            };
+            request.Headers.Add("Sec-Fetch-Site", "same-origin");
+
+            using var response = await client.SendAsync(request);
+
+            Assert.True(
+                (int)response.StatusCode < 400,
+                $"Expected same-origin automatic CSRF validation to succeed, got {(int)response.StatusCode} {response.StatusCode}");
+        }
+
+        [Fact]
+        public async Task Logout_AutomaticCsrfProtection_RejectsCrossOriginPost()
+        {
+            using var app = await CreateAutomaticCsrfAppAsync(new AuthState { Authenticated = true });
+            using var client = app.GetTestClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/logout")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["ReturnUrl"] = "/",
+                }),
+            };
+            request.Headers.Add("Sec-Fetch-Site", "cross-site");
+            request.Headers.Add("Origin", "https://evil.example");
+
+            using var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+#endif
 
         // ─── Helpers ─────────────────────────────────────────────────────────────────
 

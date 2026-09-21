@@ -13,6 +13,7 @@
 - OWIN web APIs require bearer tokens to contain a recognized scope or role claim with a non-whitespace value. Applications using ACL-based authorization must set `AllowWebApiToBeAuthorizedByACL` to `true`. See [#4006](https://github.com/AzureAD/microsoft-identity-web/pull/4006) and [#4009](https://github.com/AzureAD/microsoft-identity-web/pull/4009).
 - Authorization fails when an explicitly configured scope or app-permission key is missing. Applications must provide the referenced configuration value or remove the explicit requirement. See [#4010](https://github.com/AzureAD/microsoft-identity-web/pull/4010).
 - Local redirect paths containing control characters are rejected. See [#4028](https://github.com/AzureAD/microsoft-identity-web/pull/4028).
+- `MapLoginAndLogout()` uses ASP.NET Core 11 automatic CSRF validation when available, allowing valid same-origin logout posts without requiring a token while rejecting cross-origin posts. Earlier target frameworks continue to use token-based antiforgery validation. See [#4057](https://github.com/AzureAD/microsoft-identity-web/issues/4057).
 
 ### Entra Sidecar reliability and validation
 - Requests with a selected `AgentUserId` that is empty, malformed, or the empty GUID now return HTTP 400. Callers can provide a non-empty GUID or omit the user ID. See [#4011](https://github.com/AzureAD/microsoft-identity-web/pull/4011).
